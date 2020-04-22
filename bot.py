@@ -1,40 +1,98 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# https://geekytheory.com/telegram-programando-un-bot-en-python/
+# https://bitbucket.org/master_groosha/telegram-proxy-bot/src/07a6b57372603acae7bdb78f771be132d063b899/proxy_bot.py?at=master&fileviewer=file-view-default
+# https://github.com/eternnoir/pyTelegramBotAPI/blob/master/telebot/types.py
+
+"""commands
+Name:
+Network Common Ports
+
+username:
+procamora_common_ports_bot
+
+Description:
+This is a bot to study the most important network ports
+
+About:
+This bot has been developed by @procamora
+
+Botpic:
+<imagen del bot>
+
+Commands:
+get_port - get a random port number
+get_name - get a random service name
+stats - see statistics
+help - Show help
+start - Start the bot
+"""
+
 import configparser
+import logging
 import random
 import re
-from typing import List, Dict, NoReturn
+import sys
+from pathlib import Path
+from typing import NoReturn, Tuple, List, Text
 
-from telebot import TeleBot, types  # Importamos la librería Y los tipos especiales de esta
+from procamora_utils.logger import get_logging
+from requests import exceptions
+from telebot import TeleBot, types, apihelper
 
-from connect_sqlite import select_all_protocol
-from logger import logger
+from implement_sqlite import select_all_protocol, check_database
 from protocol import Protocol
 
-FILE_CONFIG = 'settings.ini'
-config = configparser.ConfigParser()
+logger: logging = get_logging(False, 'bot_scan')
+
+
+def get_basic_file_config():
+    return '''[BASICS]
+ADMIN = 111111
+BOT_TOKEN = 1069111113:AAHOk9K5TAAAAAAAAAAIY1OgA_LNpAAAAA
+DEBUG = 0
+'''
+
+
+my_commands: Tuple[Text, ...] = (
+    '/get_port',  # 0
+    '/get_name',  # 1
+    '/stats',  # 2
+    '/help',  # 3
+    '/exit',  # 4 (SIEMPRE TIENE QUE SER EL ULTIMO, ACCEDO CON -1)
+)
+
+FILE_CONFIG: Path = Path(Path(__file__).resolve().parent, "settings.cfg")
+if not FILE_CONFIG.exists():
+    logger.critical(f'File {FILE_CONFIG} not exists and is necesary')
+    FILE_CONFIG.write_text(get_basic_file_config())
+    logger.critical(f'Creating file {FILE_CONFIG}. It is necessary to configure the file.')
+    sys.exit(1)
+
+config: configparser.ConfigParser = configparser.ConfigParser()
 config.read(FILE_CONFIG)
 
-config_basic = config["BASICS"]
-config_ssh = config["SSH"]
+config_basic: configparser.SectionProxy = config["BASICS"]
 
-administrador = 33063767
-users_permitted = [33063767, 40522670]
+if bool(int(config_basic.get('DEBUG'))):
+    bot: TeleBot = TeleBot(config["DEBUG"].get('BOT_TOKEN'))
+else:
+    bot: TeleBot = TeleBot(config_basic.get('BOT_TOKEN'))
 
-bot = TeleBot(config_basic.get('BOT_TOKEN'))
-# bot.send_message(administrador, "El bot se ha iniciado")
-logger.info("El bot se ha iniciado")
-
-dicc_botones: Dict[str, str] = {
-    'get_port': '/get_port',
-    'get_name': '/get_name',
-    'halt': '/halt',
-    'exit': '/exit',
-}
+owner_bot: int = int(config_basic.get('ADMIN'))
 
 check = b'\xE2\x9C\x94'
 cross = b'\xE2\x9D\x8C'
+
+
+def get_markup_cmd() -> types.ReplyKeyboardMarkup:
+    markup: types.ReplyKeyboardMarkup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    markup.row(my_commands[0], my_commands[1])
+    markup.row(my_commands[2])
+    markup.row(my_commands[3], my_commands[4])
+    # markup.row(my_commands[4])
+    return markup
 
 
 def is_valid_port(protocol: Protocol, response: int):
@@ -69,8 +127,9 @@ def check_port():
 
 # Handle always first "/start" message when new chat with your bot is created
 @bot.message_handler(commands=["start"])
-def command_start(message: types.Message) -> NoReturn:
-    bot.send_message(message.chat.id, f"Bienvenido al bot\nTu id es: {message.chat.id}")
+def command_start(message) -> NoReturn:
+    bot.send_message(message.chat.id, f"Welcome to the bot\nYour id is: {message.chat.id}",
+                     reply_markup=get_markup_cmd())
     command_system(message)
     return  # solo esta puesto para que no falle la inspeccion de codigo
 
@@ -80,41 +139,28 @@ def command_help(message: types.Message) -> NoReturn:
     markup = types.InlineKeyboardMarkup()
     itembtna = types.InlineKeyboardButton('Github', url="https://github.com/procamora/bot_common_ports")
     markup.row(itembtna)
-    bot.send_message(message.chat.id, "Aqui pondre todas las opciones", reply_markup=markup)
+    bot.send_message(message.chat.id, "Here I will put all the options", reply_markup=markup)
     return  # solo esta puesto para que no falle la inspeccion de codigo
 
 
 @bot.message_handler(commands=["system"])
-def command_system(message: types.Message) -> NoReturn:
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
-    markup.row(dicc_botones['get_port'], dicc_botones['get_name'])
-    # markup.row(dicc_botones['poweroff'], dicc_botones['halt'])
-    markup.row(dicc_botones['exit'])
-    bot.send_message(message.chat.id, "Escoge una opcion: ", reply_markup=markup)
+def command_system(message) -> NoReturn:
+    bot.send_message(message.chat.id, "List of available commands\nChoose an option: ", reply_markup=get_markup_cmd())
     return  # solo esta puesto para que no falle la inspeccion de codigo
 
 
-@bot.message_handler(func=lambda message: message.chat.id == administrador, commands=['exit'])
-def send_exit(message: types.Message) -> NoReturn:
-    pass
+@bot.message_handler(commands=['exit'])
+def send_exit(message) -> NoReturn:
+    bot.send_message(message.chat.id, "Nothing", reply_markup=get_markup_cmd())
+    return
 
 
-# @bot.message_handler(func=lambda message: message.chat.id == administrador, content_types=["text"])
-# def my_text(message: types.Message) -> NoReturn:
-#    if message.text in dicc_botones.values():
-#        if message.text == dicc_botones['get_port']:
-#            send_port(message)
-#        elif message.text == dicc_botones['get_name']:
-#            send_name(message)
-# elif message.text == dicc_botones['poweroff']:
-#    send_poweroff(message)
-# elif message.text == dicc_botones['halt']:
-#    send_halt(message)
-#        elif message.text == dicc_botones['exit']:
-#            send_exit(message)
-#    else:
-#        bot.send_message(message.chat.id, "Comando desconocido")
-#    return  # solo esta puesto para que no falle la inspeccion de codigo
+@bot.message_handler(commands=['stats'])
+def send_port(message: types.Message) -> NoReturn:
+    # bot.reply_to(message, stdout)
+    question: str = f'stats not implemented'
+    bot.reply_to(message, question, reply_markup=get_markup_cmd())
+    return
 
 
 @bot.message_handler(commands=['get_name'])
@@ -123,24 +169,26 @@ def send_port(message: types.Message) -> NoReturn:
     protocol: Protocol = get_random_protocol()
     question: str = f'What is the name of the protocol used by port {protocol.port}?'
     logger.debug(question)
-    bot.reply_to(message, question)
+    bot.reply_to(message, question, reply_markup=get_markup_cmd())
 
     pass
     return
 
 
 @bot.message_handler(commands=['get_port'])
-def send_name(message: types.Message) -> NoReturn:
+def send_name(message: types.Message, reply: bool = True) -> NoReturn:
     protocol: Protocol = get_random_protocol()
 
     question: str = f'What is the protocol port {protocol.name}?'
     logger.debug(question)
-    bot.reply_to(message, question)
+    if reply:
+        bot.reply_to(message, question, reply_markup=get_markup_cmd())
+    else:
+        bot.send_message(message.chat.id, question, reply_markup=get_markup_cmd())
 
     # if is_valid_port(protocol, 3389):
     #    logger.debug('correcto')
 
-    print('my_text')
     # Definimos siguiente accion a realizar
     bot.register_next_step_handler(message, check_name, protocol=protocol)
     return
@@ -153,62 +201,62 @@ def check_name_aux(message: types.Message, protocol: Protocol):
     :param protocol:
     :return:
     """
-    bot.reply_to(message, 'Enter a valid port number')
+    bot.reply_to(message, 'Enter a valid port number', reply_markup=get_markup_cmd())
     bot.register_next_step_handler(message, check_name, protocol=protocol)
 
 
-def check_name(message: types.Message, protocol: Protocol):
+def check_name(message: types.Message, protocol: Protocol) -> NoReturn:
     # Si no es un integer repetimos la pregunta
+    if message.text == my_commands[-1]:  # exit
+        bot.reply_to(message, "return main menu", reply_markup=get_markup_cmd())
+        return
+
     if not re.search(r'^\d+$', message.text):
         check_name_aux(message, protocol)
+        return
 
     if protocol.port == int(message.text):
-        bot.reply_to(message, check)
+        bot.reply_to(message, check, reply_markup=get_markup_cmd())
     else:
-        bot.reply_to(message, cross.decode("utf-8"))
+        bot.reply_to(message, cross.decode("utf-8"), reply_markup=get_markup_cmd())
         # bot.reply_to(message, f'The answer is incorrect {cross.decode("utf-8")}')
 
-    bot.reply_to(message, str(protocol))
+    response: Text = f'{protocol.name}\nport={protocol.port}\nprotocol={protocol.protocol}\n' \
+                     f'description={protocol.description}'
+    bot.reply_to(message, response, reply_markup=get_markup_cmd())
     logger.info(f'{protocol.port} == {message.text}')
     logger.info(protocol)
 
-    send_name(message)
+    send_name(message, reply=False)
 
 
-@bot.message_handler(func=lambda message: message.chat.id == administrador, content_types=["photo"])
-def my_photo(message) -> NoReturn:
-    if message.reply_to_message:
-        bot.send_photo(message.chat.id, list(message.photo)[-1].file_id)
-    else:
-        bot.send_message(message.chat.id, "No one to reply photo!")
-    return  # solo esta puesto para que no falle la inspeccion de codigo
-
-
-@bot.message_handler(func=lambda message: message.chat.id == administrador, content_types=["voice"])
-def my_voice(message: types.Message) -> NoReturn:
-    if message.reply_to_message:
-        bot.send_voice(message.chat.id, message.voice.file_id, duration=message.voice.duration)
-    else:
-        bot.send_message(message.chat.id, "No one to reply voice!")
-    return  # solo esta puesto para que no falle la inspeccion de codigo
-
-
-@bot.message_handler(func=lambda message: message.chat.id in users_permitted, content_types=["document"])
-def my_document(message: types.Message) -> NoReturn:
-    # if message.reply_to_message:
-    #    bot.send_voice(message.chat.id, message.voice.file_id, duration=message.voice.duration)
-    # else:
-    bot.reply_to(message, f'Aun no he implementado este tipo de ficheros: "{message.document.mime_type}"')
-    return  # solo esta puesto para que no falle la inspeccion de codigo
+@bot.message_handler(func=lambda message: message.chat.id == owner_bot)
+def text_not_valid(message) -> NoReturn:
+    texto: Text = 'unknown command, enter a valid command :)'
+    bot.reply_to(message, texto, reply_markup=get_markup_cmd())
+    return
 
 
 @bot.message_handler(regexp=".*")
-def handle_resto(message: types.Message) -> NoReturn:
-    texto = 'Unknown command'
-    bot.reply_to(message, texto)
+def handle_resto(message) -> NoReturn:
+    texto: Text = "You're not allowed to perform this action, that's because you're not me.\n" \
+                  'As far as you know, it disappears -.-'
+    bot.reply_to(message, texto, reply_markup=get_markup_cmd())
     return  # solo esta puesto para que no falle la inspeccion de codigo
 
 
-# Con esto, le decimos al bot que siga funcionando incluso si encuentra
-# algun fallo.
-bot.polling(none_stop=False)
+def main():
+    check_database()  # create db if not exists
+    try:
+        bot.send_message(owner_bot, "%2A%2Anegrita%2A%2A", reply_markup=get_markup_cmd(), disable_notification=True)
+        logger.info('Starting bot')
+    except (apihelper.ApiException, exceptions.ReadTimeout) as e:
+        logger.critical(f'Error in init bot: {e}')
+        sys.exit(1)
+
+    # Con esto, le decimos al bot que siga funcionando incluso si encuentra algun fallo.
+    bot.infinity_polling(none_stop=True)
+
+
+if __name__ == "__main__":
+    main()

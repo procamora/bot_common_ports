@@ -14,6 +14,8 @@ INSERT INTO "Ports" VALUES ('ssh',22,'tcp','Secure Shell (SSH),secure logins, fi
 INSERT INTO "Ports" VALUES ('telnet',23,'tcp','Telnet protocol—unencrypted text communications');
 INSERT INTO "Ports" VALUES ('SMTP',25,'tcp','Simple Mail Transfer Protocol (SMTP), used for email routing between mail servers');
 INSERT INTO "Ports" VALUES ('domain',53,'both','Domain Name Server (DNS)');
+INSERT INTO "Ports" VALUES ('bootps',67,'udp','Server Dynamic Host Configuration Protocol (DHCP)');
+INSERT INTO "Ports" VALUES ('bootpc',68,'udp','Client Dynamic Host Configuration Protocol (DHCP)');
 INSERT INTO "Ports" VALUES ('tftp',69,'udp','Trivial File Transfer Protocol (TFTP)');
 INSERT INTO "Ports" VALUES ('www-http',80,'tcp','Hypertext Transfer Protocol (HTTP)');
 INSERT INTO "Ports" VALUES ('Kerberos',88,'udp','Kerberos authentication system');
