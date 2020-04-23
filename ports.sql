@@ -1,11 +1,22 @@
 BEGIN TRANSACTION;
+DROP TABLE IF EXISTS "Ports";
 CREATE TABLE IF NOT EXISTS "Ports" (
-	"Name"	TEXT NOT NULL,
-	"Port"	INTEGER NOT NULL,
-	"Protocol"	TEXT NOT NULL,
-	"Description"	TEXT,
-	PRIMARY KEY("Port")
+    "name"  TEXT NOT NULL,
+    "port"  INTEGER NOT NULL,
+    "protocol"  TEXT NOT NULL,
+    "description"   TEXT,
+    PRIMARY KEY("port")
 );
+
+DROP TABLE IF EXISTS "Stats";
+CREATE TABLE IF NOT EXISTS "Stats" (
+    "id"            INTEGER NOT NULL,
+    "id_user"       INTEGER NOT NULL,
+    "id_port"       INTEGER NOT NULL,
+    "successful"    TEXT NOT NULL,
+    PRIMARY KEY("id")
+);
+
 
 
 INSERT INTO "Ports" VALUES ('fttp-data',20,'tcp','File Transfer Protocol (FTP) data transfer');

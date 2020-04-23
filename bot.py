@@ -35,14 +35,15 @@ import random
 import re
 import sys
 from pathlib import Path
-from typing import NoReturn, Tuple, List, Text
+from typing import NoReturn, Tuple, List, Text, Callable
 
 from procamora_utils.logger import get_logging
 from requests import exceptions
 from telebot import TeleBot, types, apihelper
 
-from implement_sqlite import select_all_protocol, check_database
+from implement_sqlite import select_all_protocol, check_database, insert_stat, select_user_stats
 from protocol import Protocol
+from stats import Stats
 
 logger: logging = get_logging(False, 'bot_scan')
 
@@ -59,8 +60,9 @@ my_commands: Tuple[Text, ...] = (
     '/get_port',  # 0
     '/get_name',  # 1
     '/stats',  # 2
-    '/help',  # 3
-    '/exit',  # 4 (SIEMPRE TIENE QUE SER EL ULTIMO, ACCEDO CON -1)
+    '/start',  # 3
+    '/help',  # 4
+    '/exit',  # 5 (SIEMPRE TIENE QUE SER EL ULTIMO, ACCEDO CON -1)
 )
 
 FILE_CONFIG: Path = Path(Path(__file__).resolve().parent, "settings.cfg")
@@ -90,7 +92,7 @@ def get_markup_cmd() -> types.ReplyKeyboardMarkup:
     markup: types.ReplyKeyboardMarkup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
     markup.row(my_commands[0], my_commands[1])
     markup.row(my_commands[2])
-    markup.row(my_commands[3], my_commands[4])
+    markup.row(my_commands[-2], my_commands[-1])
     # markup.row(my_commands[4])
     return markup
 
@@ -107,7 +109,6 @@ def is_valid_name(protocol: Protocol, response: str):
 def get_random_protocol() -> Protocol:
     """
     Obtengo todos los protocolos disponibles y aleatoriamente selecciono uno para retornarlo
-
     :return Protocol:
     """
     response_query: List[Protocol] = select_all_protocol()
@@ -128,7 +129,9 @@ def check_port():
 # Handle always first "/start" message when new chat with your bot is created
 @bot.message_handler(commands=["start"])
 def command_start(message) -> NoReturn:
-    bot.send_message(message.chat.id, f"Welcome to the bot\nYour id is: {message.chat.id}",
+    bot.send_message(message.chat.id,
+                     f"Welcome to the bot Network Common Ports\nThis is a bot to study the most important network ports"
+                     f"\nYour id is: {message.chat.id}",
                      reply_markup=get_markup_cmd())
     command_system(message)
     return  # solo esta puesto para que no falle la inspeccion de codigo
@@ -139,13 +142,16 @@ def command_help(message: types.Message) -> NoReturn:
     markup = types.InlineKeyboardMarkup()
     itembtna = types.InlineKeyboardButton('Github', url="https://github.com/procamora/bot_common_ports")
     markup.row(itembtna)
-    bot.send_message(message.chat.id, "Here I will put all the options", reply_markup=markup)
+    bot.send_message(message.chat.id, 'You can find the source code for this bot in:', reply_markup=markup)
+    command_system(message)
     return  # solo esta puesto para que no falle la inspeccion de codigo
 
 
 @bot.message_handler(commands=["system"])
 def command_system(message) -> NoReturn:
-    bot.send_message(message.chat.id, "List of available commands\nChoose an option: ", reply_markup=get_markup_cmd())
+    commands: Text = '\n'.join(i for i in my_commands)
+    bot.send_message(message.chat.id, f"List of available commands\nChoose an option:\n{commands}",
+                     reply_markup=get_markup_cmd())
     return  # solo esta puesto para que no falle la inspeccion de codigo
 
 
@@ -156,10 +162,29 @@ def send_exit(message) -> NoReturn:
 
 
 @bot.message_handler(commands=['stats'])
-def send_port(message: types.Message) -> NoReturn:
-    # bot.reply_to(message, stdout)
-    question: str = f'stats not implemented'
-    bot.reply_to(message, question, reply_markup=get_markup_cmd())
+def send_stats(message: types.Message) -> NoReturn:
+    """
+    Muestra las estadisticas del usuario
+    :param message:
+    :return:
+    """
+    stat: Stats = select_user_stats(message.chat.id, 500)
+    logger.debug(stat)
+    print(message)
+    response: Text = f"user: {message.from_user.username}\n" \
+                     f"total questions: {len(stat.questions)}\n" \
+                     f"total successful: {stat.total_success}\n" \
+                     f"total failed: {stat.total_fail}\n" \
+                     "Top failed:\n"
+
+    list_protocols: List[Protocol]
+    list_attemps: List[int]
+    list_protocols, list_attemps = stat.get_top_questions_failed_attempts(40)
+    for protocol, attemp in zip(list_protocols, list_attemps):
+        response += f'   - {attemp} (attemps) -> name={protocol.name.upper()}, port={protocol.port}, ' \
+                    f'protocol={protocol.protocol}\n'
+
+    bot.reply_to(message, response, reply_markup=get_markup_cmd())
     return
 
 
@@ -233,7 +258,8 @@ def check_name(message: types.Message, protocol: Protocol) -> NoReturn:
 @bot.message_handler(func=lambda message: message.chat.id == owner_bot)
 def text_not_valid(message) -> NoReturn:
     texto: Text = 'unknown command, enter a valid command :)'
-    bot.reply_to(message, texto, reply_markup=get_markup_cmd())
+    command_system(message)
+    # bot.reply_to(message, texto, reply_markup=get_markup_cmd())
     return
 
 
@@ -248,7 +274,8 @@ def handle_resto(message) -> NoReturn:
 def main():
     check_database()  # create db if not exists
     try:
-        bot.send_message(owner_bot, "%2A%2Anegrita%2A%2A", reply_markup=get_markup_cmd(), disable_notification=True)
+        import urllib
+        bot.send_message(owner_bot, 'Starting bot', reply_markup=get_markup_cmd(), disable_notification=True)
         logger.info('Starting bot')
     except (apihelper.ApiException, exceptions.ReadTimeout) as e:
         logger.critical(f'Error in init bot: {e}')
