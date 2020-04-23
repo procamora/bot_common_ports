@@ -212,7 +212,7 @@ def check_port(message: types.Message, protocol: Protocol) -> NoReturn:
     if is_response_command(message):
         return
 
-    if not re.search(r'^\w+$', message.text):
+    if not re.search(r'^\w+-?(\w+)*$', message.text):
         report_and_repeat(message, protocol, check_port, 'Enter a valid text')
         return
 

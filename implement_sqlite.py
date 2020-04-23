@@ -54,10 +54,10 @@ def select_user_stats(id_user: int, limit) -> Stats:
     return stats
 
 
-def insert_stat(id_user: int, protocol: Protocol, successful: int):
+def insert_stat(id_user: int, protocol: Protocol, successful: bool):
     query: Text = f"INSERT INTO Stats(id_user, id_port, successful) VALUES (?, ?, ?)"
     logger.info(query)
-    conection_sqlite(DB, query, query_params=(id_user, protocol.port, successful), is_dict=False)
+    conection_sqlite(DB, query, query_params=(id_user, protocol.port, str(successful)), is_dict=False)
 
 
 def check_database() -> NoReturn:
