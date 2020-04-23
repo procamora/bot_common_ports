@@ -1,0 +1,12 @@
+[Unit]
+Description=Network Common Ports
+After=multi-user.target
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/python3 /home/pi/bot_common_ports/bot.py >> /home/pi/bot_common_ports/tg_bot.log 2>&1
+ExecStop=killall -9 bot.py
+User=pi
+
+[Install]
+WantedBy=multi-user.target

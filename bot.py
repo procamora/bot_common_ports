@@ -161,7 +161,6 @@ def send_stats(message: types.Message) -> NoReturn:
     """
     stat: Stats = select_user_stats(message.chat.id, 500)
     logger.debug(stat)
-    print(message)
     response: Text = f"user: {message.from_user.username}\n" \
                      f"total questions: {len(stat.questions)}\n" \
                      f"total successful: {stat.total_success}\n" \
@@ -197,7 +196,6 @@ def send_port(message: types.Message, reply: bool = True) -> NoReturn:
     protocol: Protocol = get_random_protocol()
 
     question: str = f'New question:\nWhat is the name of the protocol used by port *{protocol.port}*?'
-    logger.debug(question)
     if reply:
         bot.reply_to(message, escape_string(question), reply_markup=get_markup_cmd(), parse_mode='MarkdownV2')
     else:
@@ -236,7 +234,6 @@ def send_name(message: types.Message, reply: bool = True) -> NoReturn:
     protocol: Protocol = get_random_protocol()
 
     question: str = f'New question:\nWhat is the protocol port *{protocol.name.upper()}*?'
-    logger.debug(question)
     if reply:
         bot.reply_to(message, escape_string(question), reply_markup=get_markup_cmd(), parse_mode='MarkdownV2')
     else:
@@ -275,20 +272,20 @@ def check_name(message: types.Message, protocol: Protocol) -> NoReturn:
     send_name(message, reply=False)
 
 
-@bot.message_handler(func=lambda message: message.chat.id == owner_bot)
-def text_not_valid(message) -> NoReturn:
+@bot.message_handler(regexp=".*")
+def text_not_valid(message: types.Message) -> NoReturn:
     texto: Text = 'unknown command, enter a valid command :)'
+    bot.reply_to(message, texto, reply_markup=get_markup_cmd())
     command_system(message)
-    # bot.reply_to(message, texto, reply_markup=get_markup_cmd())
     return
 
 
-@bot.message_handler(regexp=".*")
-def handle_resto(message) -> NoReturn:
-    texto: Text = "You're not allowed to perform this action, that's because you're not me.\n" \
-                  'As far as you know, it disappears -.-'
-    bot.reply_to(message, texto, reply_markup=get_markup_cmd())
-    return  # solo esta puesto para que no falle la inspeccion de codigo
+# @bot.message_handler(regexp=".*")
+# def handle_resto(message) -> NoReturn:
+#    texto: Text = "You're not allowed to perform this action, that's because you're not me.\n" \
+#                  'As far as you know, it disappears -.-'
+#    bot.reply_to(message, texto, reply_markup=get_markup_cmd())
+#    return  # solo esta puesto para que no falle la inspeccion de codigo
 
 
 def is_response_command(message: types.Message):

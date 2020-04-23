@@ -31,17 +31,17 @@ class Stats:
         """
         # obtengo un set con los protocolos, eliminando repetidos (necesario implementar func hash en stats y protocols)
         # filtrando unicamente los que se han fallado
-        unic_protocols: Set[Protocol] = set(filter(lambda x: x.successful == False, self.questions))
+        unic_protocols: Set[Protocol] = set(filter(lambda p: p.successful == False, self.questions))
         # unic_protocols: Set[Protocol] = set([i for i in self.questions])
 
         # Obtener repeticiones totales de cada elemento del set
         repeat: Dict[int, int] = dict()
-        for x in unic_protocols:
+        for prt in unic_protocols:
             cont: int = 0
             for y in self.questions:
-                if x.port == y.port:
+                if prt.port == y.port:
                     cont += 1
-            repeat[x.port] = cont
+            repeat[prt.port] = cont
 
         # Ordenar set en base a las repeticiones
         sort_protocols: List[Protocol] = sorted(unic_protocols,
@@ -59,7 +59,7 @@ class Stats:
         for i in range(0, top):
             response_prot.append(sort_protocols[i])
             response_fail.append(repeat[sort_protocols[i].port])
-        
+
         return response_prot, response_fail
 
     def __hash__(self):
