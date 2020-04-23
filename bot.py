@@ -117,15 +117,6 @@ def get_random_protocol() -> Protocol:
     return response_query[element]
 
 
-def check_port():
-    protocol: Protocol = get_random_protocol()
-    question: str = f'What is the name of the protocol used by port {protocol.port}?'
-    logger.debug(question)
-
-    if is_valid_port(protocol, 3389):
-        logger.debug('correcto')
-
-
 # Handle always first "/start" message when new chat with your bot is created
 @bot.message_handler(commands=["start"])
 def command_start(message) -> NoReturn:
@@ -188,70 +179,99 @@ def send_stats(message: types.Message) -> NoReturn:
     return
 
 
-@bot.message_handler(commands=['get_name'])
-def send_port(message: types.Message) -> NoReturn:
-    # bot.reply_to(message, stdout)
-    protocol: Protocol = get_random_protocol()
-    question: str = f'What is the name of the protocol used by port {protocol.port}?'
-    logger.debug(question)
-    bot.reply_to(message, question, reply_markup=get_markup_cmd())
+def report_and_repeat(message: types.Message, protocol: Protocol, func: Callable, info: Text):
+    """
+    Metodo auxiliar con el que volver a preguntar tras una respuesta no valida
+    :param message:
+    :param protocol:
+    :param func:
+    :param info:
+    :return:
+    """
+    bot.reply_to(message, info, reply_markup=get_markup_cmd())
+    bot.register_next_step_handler(message, func, protocol=protocol)
 
-    pass
+
+@bot.message_handler(commands=['get_name'])
+def send_port(message: types.Message, reply: bool = True) -> NoReturn:
+    protocol: Protocol = get_random_protocol()
+
+    question: str = f'New question:\nWhat is the name of the protocol used by port *{protocol.port}*?'
+    logger.debug(question)
+    if reply:
+        bot.reply_to(message, escape_string(question), reply_markup=get_markup_cmd(), parse_mode='MarkdownV2')
+    else:
+        bot.send_message(message.chat.id, escape_string(question), reply_markup=get_markup_cmd(),
+                         parse_mode='MarkdownV2')
+
+    bot.register_next_step_handler(message, check_port, protocol=protocol)
     return
+
+
+def check_port(message: types.Message, protocol: Protocol) -> NoReturn:
+    if is_response_command(message):
+        return
+
+    if not re.search(r'^\w+$', message.text):
+        report_and_repeat(message, protocol, check_port, 'Enter a valid text')
+        return
+
+    if re.search(rf'{message.text}', protocol.name, re.IGNORECASE):
+        bot.send_message(message.chat.id, check.decode("utf-8"), reply_markup=get_markup_cmd())
+        insert_stat(message.chat.id, protocol, True)
+    else:
+        bot.send_message(message.chat.id, cross.decode("utf-8"), reply_markup=get_markup_cmd())
+        insert_stat(message.chat.id, protocol, False)
+
+    response: Text = f'*{protocol.port}*\nname={protocol.name}\nprotocol={protocol.protocol}\n' \
+                     f'description={protocol.description}'
+    bot.reply_to(message, escape_string(response), reply_markup=get_markup_cmd(), parse_mode='MarkdownV2')
+    logger.info(f'{protocol.port} == {message.text}')
+    logger.info(protocol)
+    send_port(message, reply=False)
 
 
 @bot.message_handler(commands=['get_port'])
 def send_name(message: types.Message, reply: bool = True) -> NoReturn:
     protocol: Protocol = get_random_protocol()
 
-    question: str = f'What is the protocol port {protocol.name}?'
+    question: str = f'New question:\nWhat is the protocol port *{protocol.name.upper()}*?'
     logger.debug(question)
     if reply:
-        bot.reply_to(message, question, reply_markup=get_markup_cmd())
+        bot.reply_to(message, escape_string(question), reply_markup=get_markup_cmd(), parse_mode='MarkdownV2')
     else:
-        bot.send_message(message.chat.id, question, reply_markup=get_markup_cmd())
-
-    # if is_valid_port(protocol, 3389):
-    #    logger.debug('correcto')
+        bot.send_message(message.chat.id, escape_string(question), reply_markup=get_markup_cmd(),
+                         parse_mode='MarkdownV2')
 
     # Definimos siguiente accion a realizar
     bot.register_next_step_handler(message, check_name, protocol=protocol)
     return
 
 
-def check_name_aux(message: types.Message, protocol: Protocol):
-    """
-    Metodo auxiliar con el que volver esperar respuesta para el metodo check_name
-    :param message:
-    :param protocol:
-    :return:
-    """
-    bot.reply_to(message, 'Enter a valid port number', reply_markup=get_markup_cmd())
-    bot.register_next_step_handler(message, check_name, protocol=protocol)
-
-
 def check_name(message: types.Message, protocol: Protocol) -> NoReturn:
     # Si no es un integer repetimos la pregunta
-    if message.text == my_commands[-1]:  # exit
-        bot.reply_to(message, "return main menu", reply_markup=get_markup_cmd())
+    # if message.text == my_commands[-1]:  # exit
+    # bot.reply_to(message, "return main menu", reply_markup=get_markup_cmd())
+    #
+    if is_response_command(message):
         return
 
     if not re.search(r'^\d+$', message.text):
-        check_name_aux(message, protocol)
+        report_and_repeat(message, protocol, check_name, 'Enter a valid port number: (1-65535)')
         return
 
     if protocol.port == int(message.text):
-        bot.reply_to(message, check, reply_markup=get_markup_cmd())
+        bot.send_message(message.chat.id, check.decode("utf-8"), reply_markup=get_markup_cmd())
+        insert_stat(message.chat.id, protocol, True)
     else:
-        bot.reply_to(message, cross.decode("utf-8"), reply_markup=get_markup_cmd())
-        # bot.reply_to(message, f'The answer is incorrect {cross.decode("utf-8")}')
+        bot.send_message(message.chat.id, cross.decode("utf-8"), reply_markup=get_markup_cmd())
+        insert_stat(message.chat.id, protocol, False)
 
-    response: Text = f'{protocol.name}\nport={protocol.port}\nprotocol={protocol.protocol}\n' \
+    response: Text = f'*{protocol.name.upper()}*\nport={protocol.port}\nprotocol={protocol.protocol}\n' \
                      f'description={protocol.description}'
-    bot.reply_to(message, response, reply_markup=get_markup_cmd())
+    bot.reply_to(message, escape_string(response), reply_markup=get_markup_cmd(), parse_mode='MarkdownV2')
     logger.info(f'{protocol.port} == {message.text}')
     logger.info(protocol)
-
     send_name(message, reply=False)
 
 
@@ -269,6 +289,32 @@ def handle_resto(message) -> NoReturn:
                   'As far as you know, it disappears -.-'
     bot.reply_to(message, texto, reply_markup=get_markup_cmd())
     return  # solo esta puesto para que no falle la inspeccion de codigo
+
+
+def is_response_command(message: types.Message):
+    response: bool = False
+    if message.text[0] == '/':
+        response = True
+
+    if message.text == my_commands[-1]:  # exit
+        bot.reply_to(message, "Question round stop", reply_markup=get_markup_cmd())
+    elif message.text == my_commands[-2]:  # help
+        command_help(message)
+    elif message.text == my_commands[0]:  # get_port
+        send_name(message)
+    elif message.text == my_commands[1]:  # get_name
+        send_port(message)
+    elif message.text == my_commands[2]:  # stats
+        send_stats(message)
+
+    return response
+
+
+def escape_string(text: Text) -> Text:
+    # In all other places characters '_‘, ’*‘, ’[‘, ’]‘, ’(‘, ’)‘, ’~‘, ’`‘, ’>‘, ’#‘, ’+‘, ’-‘, ’=‘, ’|‘, ’{‘, ’}‘,
+    # ’.‘, ’!‘ must be escaped with the preceding character ’\'.
+    return text.replace('=', r'\=').replace('_', r'\_').replace('(', r'\(').replace(')', r'\)').replace('-', r'\-'). \
+        replace('.', r'\.')
 
 
 def main():
