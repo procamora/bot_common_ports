@@ -39,7 +39,7 @@ class Stats:
         for prt in unic_protocols:
             cont: int = 0
             for y in self.questions:
-                if prt.port == y.port:
+                if prt.port == y.port and not y.successful:
                     cont += 1
             repeat[prt.port] = cont
 
